@@ -1,0 +1,343 @@
+{
+  "name": "Order Processing Automation (fixed)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Order Processing Automation",
+        "formDescription": "Submit your order details. You will receive an email once your order has been reviewed.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Customer Name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Customer Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Order Type",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Normal"
+                  },
+                  {
+                    "option": "Urgent"
+                  },
+                  {
+                    "option": "Bulk"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Order Amount",
+              "fieldType": "number",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Order Description",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -640,
+        0
+      ],
+      "id": "37a17c2f-1dde-4d4d-a78d-3a51ce4d49ee",
+      "name": "On form submission"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7a75b0cb-32d7-436b-8df2-88775afcaa41",
+              "name": "Submitted At",
+              "type": "string",
+              "value": "={{ $now.toFormat('yyyy-MM-dd HH:mm:ss') }}"
+            },
+            {
+              "id": "7cde8ff4-4bf1-4f43-bbba-966a124ae1c1",
+              "name": "Priority",
+              "type": "string",
+              "value": "={{ ({ 'Normal': 'Medium', 'Urgent': 'High', 'Bulk': 'Low' })[$json['Order Type']] || 'Medium' }}"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "0fab51f6-c7b4-4318-b3d1-83fe9c914689",
+      "name": "Prepare Order"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Customer Name: {{ $json['Customer Name'] }}\nCustomer Email: {{ $json['Customer Email'] }}\nOrder Type: {{ $json['Order Type'] }}\nOrder Amount: {{ $json['Order Amount'] }}\nOrder Description: {{ $json['Order Description'] || 'Not provided' }}\nPriority: {{ $json['Priority'] }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an order-review assistant for a small business.\nYou receive one customer order with: customer name, email, order type (Normal, Urgent or Bulk), amount, description and priority (High, Medium or Low).\n\nDecide the status:\n- \"Approved\" if the details are complete and consistent, the amount is greater than 0 and not above 50000, and the description is clear or not needed.\n- \"Needs Review\" if the amount is above 50000, the description is missing or unclear for an Urgent or Bulk order, or anything looks inconsistent or suspicious.\n\nThen return:\n- status: \"Approved\" or \"Needs Review\"\n- summary: one sentence an internal team member can read at a glance, including the reason for the status\n- email_subject: a clear subject line. For Approved, a confirmation to the customer. For Needs Review, an internal alert that mentions the customer name and priority.\n- email_body: a short, professional plain-text email. For Approved, address the customer by name, confirm the order type, amount and expected handling according to priority, and sign off with: Regards, Order Desk. For Needs Review, write to the internal reviewer with all order details and the reason it needs review.\nNever invent delivery dates, prices or policies. Output only the structured result."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "08f492fd-359f-4405-9ff9-5ceec26d6bb5",
+      "name": "AI Order Review"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5-5",
+          "cachedResultName": "Claude Sonnet 5.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        -240,
+        220
+      ],
+      "id": "8d3e5aa2-8563-4ed2-92eb-d4249d4e49c6",
+      "name": "Anthropic Chat Model"
+    },
+    {
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\n  \"status\": \"Approved\",\n  \"summary\": \"Complete Normal order of 1200, approved.\",\n  \"email_subject\": \"Your order has been confirmed\",\n  \"email_body\": \"Dear Customer, ...\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -60,
+        220
+      ],
+      "id": "d21ba224-4f68-47fe-839b-452aa4d433df",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Submitted At": "={{ $('Prepare Order').item.json['Submitted At'] }}",
+            "Customer Name": "={{ $('Prepare Order').item.json['Customer Name'] }}",
+            "Customer Email": "={{ $('Prepare Order').item.json['Customer Email'] }}",
+            "Order Type": "={{ $('Prepare Order').item.json['Order Type'] }}",
+            "Order Amount": "={{ $('Prepare Order').item.json['Order Amount'] }}",
+            "Order Description": "={{ $('Prepare Order').item.json['Order Description'] }}",
+            "Priority": "={{ $('Prepare Order').item.json['Priority'] }}",
+            "Status": "={{ $json.output.status }}",
+            "AI Summary": "={{ $json.output.summary }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        200,
+        0
+      ],
+      "id": "e7ec93dc-a38b-4e83-97cb-c11d56c87054",
+      "name": "Log order in sheet"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f57e3d4d-d7e9-47b5-bb4a-444adb2dec28",
+              "leftValue": "={{ $('AI Order Review').item.json.output.status }}",
+              "rightValue": "Approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        440,
+        0
+      ],
+      "id": "5c665c97-6257-4b13-a8ff-7751fa987ff6",
+      "name": "Approved?"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Prepare Order').item.json['Customer Email'] }}",
+        "subject": "={{ $('AI Order Review').item.json.output.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $('AI Order Review').item.json.output.email_body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        -120
+      ],
+      "id": "885484fd-0a47-419a-a434-537f262ea911",
+      "name": "Email customer (approved)"
+    },
+    {
+      "parameters": {
+        "sendTo": "REPLACE_WITH_REVIEWER_EMAIL",
+        "subject": "={{ $('AI Order Review').item.json.output.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $('AI Order Review').item.json.output.email_body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        680,
+        120
+      ],
+      "id": "9d45818b-8fef-4d1b-a4dd-fbf0085a3d2e",
+      "name": "Email reviewer (needs review)"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Prepare Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Order": {
+      "main": [
+        [
+          {
+            "node": "AI Order Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Order Review",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Order Review",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Order Review": {
+      "main": [
+        [
+          {
+            "node": "Log order in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log order in sheet": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Email customer (approved)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Email reviewer (needs review)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
