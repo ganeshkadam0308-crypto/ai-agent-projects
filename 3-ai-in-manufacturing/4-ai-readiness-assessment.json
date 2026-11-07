@@ -1,0 +1,470 @@
+{
+  "name": "4 - AI Readiness Assessment",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "AI Readiness Check for Manufacturers",
+        "formDescription": "Answer 11 quick questions. You will receive a short readiness summary and a suggested 90-day roadmap.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Company Name",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Contact Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Industry",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Pharmaceuticals"
+                  },
+                  {
+                    "option": "Electronics"
+                  },
+                  {
+                    "option": "Transport equipment"
+                  },
+                  {
+                    "option": "Food processing"
+                  },
+                  {
+                    "option": "Textiles"
+                  },
+                  {
+                    "option": "Basic metals"
+                  },
+                  {
+                    "option": "Other manufacturing"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Company Size",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Small (under 50 employees)"
+                  },
+                  {
+                    "option": "Medium (50-249 employees)"
+                  },
+                  {
+                    "option": "Large (250+ employees)"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Data Readiness",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "1 - Very low"
+                  },
+                  {
+                    "option": "2 - Low"
+                  },
+                  {
+                    "option": "3 - Medium"
+                  },
+                  {
+                    "option": "4 - High"
+                  },
+                  {
+                    "option": "5 - Very high"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Infrastructure Readiness",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "1 - Very low"
+                  },
+                  {
+                    "option": "2 - Low"
+                  },
+                  {
+                    "option": "3 - Medium"
+                  },
+                  {
+                    "option": "4 - High"
+                  },
+                  {
+                    "option": "5 - Very high"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Skills Readiness",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "1 - Very low"
+                  },
+                  {
+                    "option": "2 - Low"
+                  },
+                  {
+                    "option": "3 - Medium"
+                  },
+                  {
+                    "option": "4 - High"
+                  },
+                  {
+                    "option": "5 - Very high"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Regulatory Readiness",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "1 - Very low"
+                  },
+                  {
+                    "option": "2 - Low"
+                  },
+                  {
+                    "option": "3 - Medium"
+                  },
+                  {
+                    "option": "4 - High"
+                  },
+                  {
+                    "option": "5 - Very high"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Leadership Support",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "1 - Very low"
+                  },
+                  {
+                    "option": "2 - Low"
+                  },
+                  {
+                    "option": "3 - Medium"
+                  },
+                  {
+                    "option": "4 - High"
+                  },
+                  {
+                    "option": "5 - Very high"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Biggest Pain Point",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Unplanned machine downtime"
+                  },
+                  {
+                    "option": "Product quality defects"
+                  },
+                  {
+                    "option": "Supply chain disruption"
+                  },
+                  {
+                    "option": "Manual admin and reporting"
+                  },
+                  {
+                    "option": "Not sure yet"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Notes",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "b6932d54-2a80-4f02-ada0-e8dcd538d9cf",
+      "name": "Readiness form"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.item.json;\nconst sc = (v) => Number(String(v || '').trim().charAt(0)) || 0;\nconst dims = {\n  'Data': sc(j['Data Readiness']),\n  'Infrastructure': sc(j['Infrastructure Readiness']),\n  'Skills': sc(j['Skills Readiness']),\n  'Regulation': sc(j['Regulatory Readiness']),\n  'Leadership': sc(j['Leadership Support'])\n};\nconst vals = Object.values(dims);\nconst avg = vals.reduce((a, b) => a + b, 0) / vals.length;\nconst sorted = Object.entries(dims).sort((a, b) => a[1] - b[1]);\nconst weakest = sorted.slice(0, 2).map(e => e[0] + ' (' + e[1] + '/5)').join(', ');\nconst maturity = avg < 2.5 ? 'Beginner' : (avg < 3.5 ? 'Developing' : 'Ready to scale');\nconst useCase = {\n  'Unplanned machine downtime': 'Predictive maintenance',\n  'Product quality defects': 'Quality assurance and control',\n  'Supply chain disruption': 'Supply chain optimisation',\n  'Manual admin and reporting': 'Workflow automation and reporting',\n  'Not sure yet': 'Quick data audit to choose the first use-case'\n}[j['Biggest Pain Point']] || 'Quick data audit to choose the first use-case';\nreturn { json: {\n  submitted_at: new Date().toISOString().replace('T', ' ').slice(0, 19),\n  company: j['Company Name'], contact_email: j['Contact Email'],\n  industry: j['Industry'], company_size: j['Company Size'],\n  scores: dims, scores_text: Object.entries(dims).map(e => e[0] + ': ' + e[1] + '/5').join(', '),\n  overall_score: Math.round(avg * 10) / 10, maturity: maturity, weakest_areas: weakest,\n  pain_point: j['Biggest Pain Point'], suggested_use_case: useCase, notes: j['Notes'] || ''\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        0
+      ],
+      "id": "a2e1455b-2c1b-48e4-b5ff-317c0fdb2308",
+      "name": "Score Readiness"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Company: {{ $json.company }}\nIndustry: {{ $json.industry }}\nSize: {{ $json.company_size }}\nScores: {{ $json.scores_text }}\nOverall: {{ $json.overall_score }}/5 ({{ $json.maturity }})\nWeakest areas: {{ $json.weakest_areas }}\nBiggest pain point: {{ $json.pain_point }}\nSuggested first use-case: {{ $json.suggested_use_case }}\nClient notes: {{ $json.notes }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an AI-transformation consultant for manufacturing companies in Europe.\nYou receive a company's self-assessed readiness scores (1 to 5) across data, infrastructure, skills, regulation and leadership, plus its industry, size, biggest pain point and a suggested first use-case.\n\nContext from OECD (2026), 'Progress in Implementing the EU Coordinated Plan on AI (Volume 2)', manufacturing chapter:\n- AI use by EU manufacturing enterprises rose from 7% to 11% between 2021 and 2024; adoption is fragmented and frontrunners are pharmaceuticals and electronics.\n- Most AI used is language or administrative (text mining, text generation); use in core production (image recognition, process optimisation) is still low.\n- Main reasons enterprises gave for not using AI: lack of expertise (over 7.5%), data availability or quality (5.0%), legal consequences (4.9%), incompatibility with existing systems (4.8%), data protection (4.4%), cost (3.9%).\n- Less than 2% of the manufacturing workforce has relevant AI skills in most Member States.\n- Recommendations stress interoperable data sharing, practical guidance on the EU AI Act and GDPR, upskilling co-created with industry, and building trust through success stories.\nUse this context to explain barriers, but never state it as a fact about the client's own company.\n\nWrite a practical, honest plan:\n- executive_summary: 3-4 sentences on where the company stands and the single most important next step\n- recommended_first_use_case: confirm or adjust the suggested use-case, with one sentence of reasoning\n- quick_wins: three actions achievable in 30 days, as a numbered list\n- roadmap_30_days, roadmap_60_days, roadmap_90_days: two or three concrete actions each\n- key_risks: the main risks, including data, skills, regulatory (EU AI Act, GDPR) and change-management risks\n- success_kpis: three measurable indicators to track\nBe specific to the weakest areas. Do not promise savings or ROI figures. Keep the whole answer concise."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -460,
+        0
+      ],
+      "id": "d75ad6fd-6af2-46fc-b88c-7de9b640e7f0",
+      "name": "AI Roadmap Consultant"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5-5",
+          "cachedResultName": "Claude Sonnet 5.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        -540,
+        240
+      ],
+      "id": "75a218a0-d1e1-4158-9ad7-164dbf2e8267",
+      "name": "Anthropic Chat Model"
+    },
+    {
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\n  \"executive_summary\": \"...\",\n  \"recommended_first_use_case\": \"...\",\n  \"quick_wins\": \"1) ...\\n2) ...\\n3) ...\",\n  \"roadmap_30_days\": \"...\",\n  \"roadmap_60_days\": \"...\",\n  \"roadmap_90_days\": \"...\",\n  \"key_risks\": \"...\",\n  \"success_kpis\": \"1) ...\\n2) ...\\n3) ...\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -340,
+        240
+      ],
+      "id": "bd5eca70-b20a-4596-a854-892418a30c2e",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = $input.item.json.output || {};\nconst b = $('Score Readiness').item.json;\nconst subject = 'AI readiness report: ' + b.company + ' (' + b.maturity + ', ' + b.overall_score + '/5)';\nconst body = [\n  'DRAFT FOR REVIEW - not yet sent to the client',\n  '',\n  'Company: ' + b.company + ' | Industry: ' + b.industry + ' | Size: ' + b.company_size,\n  'Client contact: ' + b.contact_email,\n  'Scores: ' + b.scores_text,\n  'Overall: ' + b.overall_score + '/5 (' + b.maturity + ')',\n  'Weakest areas: ' + b.weakest_areas,\n  'Biggest pain point: ' + b.pain_point,\n  '',\n  'SUMMARY', out.executive_summary || '',\n  '',\n  'RECOMMENDED FIRST USE-CASE', out.recommended_first_use_case || b.suggested_use_case,\n  '',\n  'QUICK WINS (30 days)', out.quick_wins || '',\n  '',\n  'ROADMAP', '30 days: ' + (out.roadmap_30_days || ''), '60 days: ' + (out.roadmap_60_days || ''), '90 days: ' + (out.roadmap_90_days || ''),\n  '',\n  'KEY RISKS', out.key_risks || '',\n  '',\n  'SUCCESS KPIs', out.success_kpis || '',\n  '',\n  'Context source: OECD (2026), Progress in Implementing the EU Coordinated Plan on AI (Volume 2). Self-assessed scores; AI-generated draft. Review before sharing.'\n].join('\\n');\nreturn { json: { ...b, email_subject: subject, email_body: body, first_use_case: out.recommended_first_use_case || b.suggested_use_case } };",
+        "mode": "runOnceForEachItem"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "f807a81e-b177-4262-a124-3f84ef34ff1b",
+      "name": "Compose Report"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Submitted At": "={{ $json.submitted_at }}",
+            "Company": "={{ $json.company }}",
+            "Contact Email": "={{ $json.contact_email }}",
+            "Industry": "={{ $json.industry }}",
+            "Company Size": "={{ $json.company_size }}",
+            "Overall Score": "={{ $json.overall_score }}",
+            "Maturity": "={{ $json.maturity }}",
+            "Weakest Areas": "={{ $json.weakest_areas }}",
+            "Pain Point": "={{ $json.pain_point }}",
+            "First Use Case": "={{ $json.first_use_case }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        20,
+        0
+      ],
+      "id": "075e2223-c8c6-4d65-87db-a12a1efde323",
+      "name": "Log assessment",
+      "notes": "Select the spreadsheet and the tab: Readiness Log",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "sendTo": "REPLACE_WITH_YOUR_EMAIL",
+        "subject": "={{ $('Compose Report').item.json.email_subject }}",
+        "emailType": "text",
+        "message": "={{ $('Compose Report').item.json.email_body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "85a9fc4d-aa8e-4e69-b9f8-c0bc252c9cd2",
+      "name": "Send draft to consultant for review"
+    },
+    {
+      "parameters": {
+        "content": "**4 AI Readiness Assessment (AI transformation)**\n\nSetup:\n1. Select the Google Sheet tab 'Readiness Log'\n2. Replace REPLACE_WITH_YOUR_EMAIL\n3. Open the form URL from the trigger node to test\n\nDesign choice: the report goes to YOU first as a draft. Forward it to the client after review (human in the loop).",
+        "height": 240,
+        "width": 440,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        -300
+      ],
+      "id": "4dfc7680-fe8c-4bc4-8120-f200fd860ca7",
+      "name": "Setup Notes"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Readiness form": {
+      "main": [
+        [
+          {
+            "node": "Score Readiness",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Readiness": {
+      "main": [
+        [
+          {
+            "node": "AI Roadmap Consultant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Roadmap Consultant",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Roadmap Consultant",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Roadmap Consultant": {
+      "main": [
+        [
+          {
+            "node": "Compose Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compose Report": {
+      "main": [
+        [
+          {
+            "node": "Log assessment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log assessment": {
+      "main": [
+        [
+          {
+            "node": "Send draft to consultant for review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

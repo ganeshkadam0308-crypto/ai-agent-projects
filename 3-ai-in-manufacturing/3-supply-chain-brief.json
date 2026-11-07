@@ -1,0 +1,226 @@
+{
+  "name": "3 - Supply Chain Weekly Brief",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "weeksInterval": 1,
+              "triggerAtDay": [
+                1
+              ],
+              "triggerAtHour": 8,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -800,
+        0
+      ],
+      "id": "c3f0ef34-fdb4-4280-bf5b-14f69281440e",
+      "name": "Every Monday 08:00"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -580,
+        0
+      ],
+      "id": "68fe0870-bbbb-4784-b676-7bf7312ebf91",
+      "name": "Read inventory",
+      "notes": "Select the spreadsheet and the tab: Inventory",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst atRisk = [];\nlet checked = 0;\nfor (const r of rows) {\n  const stock = Number(r['Stock On Hand']);\n  const demand = Number(r['Weekly Demand']);\n  const lead = Number(r['Lead Time Days']);\n  const safety = Number(r['Safety Stock Days'] || 0);\n  if (!r['SKU'] || !(demand > 0) || Number.isNaN(stock) || Number.isNaN(lead)) continue;\n  checked++;\n  const coverDays = (stock / demand) * 7;\n  const needDays = lead + safety;\n  const supplierRisk = String(r['Supplier Risk'] || 'Low');\n  if (coverDays < needDays || supplierRisk === 'High') {\n    atRisk.push({\n      sku: r['SKU'], item: r['Item'], supplier: r['Supplier'], supplier_risk: supplierRisk,\n      cover_days: Math.round(coverDays * 10) / 10, needed_days: needDays,\n      gap_days: Math.round((coverDays - needDays) * 10) / 10\n    });\n  }\n}\natRisk.sort((a, b) => a.gap_days - b.gap_days);\nreturn [{ json: {\n  generated_on: new Date().toISOString().slice(0, 10),\n  skus_checked: checked,\n  at_risk_count: atRisk.length,\n  at_risk: atRisk.slice(0, 15)\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -360,
+        0
+      ],
+      "id": "f5870859-cccc-4e76-a2b1-93fd9c6dd5ea",
+      "name": "Calculate Stock Cover"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Week of {{ $json.generated_on }}\nSKUs checked: {{ $json.skus_checked }}\nAt-risk items: {{ $json.at_risk_count }}\nAt-risk list (JSON): {{ JSON.stringify($json.at_risk) }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a supply-chain analyst writing a weekly briefing for a manufacturing supply-chain lead.\nYou receive a pre-computed list of at-risk items. For each, 'cover_days' is how many days current stock will last at the current weekly demand, 'needed_days' is supplier lead time plus safety days, and 'gap_days' is cover minus needed (negative means a stock-out risk before a new order could arrive). Supplier risk is Low, Medium or High.\n\nWrite a short, clear briefing:\n- subject: include the week date and the number of at-risk items\n- body: plain text, under 250 words. Start with a one-sentence overall assessment. Then list the top priorities (most negative gap first) with one suggested action each (for example expedite an order, check an alternative supplier, review safety stock). End with one line on data limitations.\nUse only the numbers provided. Do not invent prices, delivery dates or supplier details. If no items are at risk, say so briefly. These are suggestions for the planner to review, not instructions."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -140,
+        0
+      ],
+      "id": "55f348a1-516b-4c77-8d84-619d75aecbbf",
+      "name": "AI Weekly Brief"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5-5",
+          "cachedResultName": "Claude Sonnet 5.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        -220,
+        240
+      ],
+      "id": "15f6e3a7-0c35-4552-8ade-caa429b3f2e2",
+      "name": "Anthropic Chat Model"
+    },
+    {
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\n  \"subject\": \"Supply chain brief, week of 2026-11-02: 3 items at risk\",\n  \"body\": \"Overall: three items need attention this week...\\n\\n1) ...\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -20,
+        240
+      ],
+      "id": "5ae454d6-3b08-4159-bee8-3518f10598ff",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "sendTo": "REPLACE_WITH_SUPPLY_CHAIN_LEAD_EMAIL",
+        "subject": "={{ $json.output.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.output.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "1201a991-d7f0-4992-a46b-4158438ca484",
+      "name": "Email supply chain lead"
+    },
+    {
+      "parameters": {
+        "content": "**3 Supply Chain Weekly Brief**\n\nSetup:\n1. Select the Google Sheet tab 'Inventory' (columns: SKU, Item, Stock On Hand, Weekly Demand, Lead Time Days, Safety Stock Days, Supplier, Supplier Risk)\n2. Replace the recipient email\n3. Activate the workflow to run every Monday at 08:00 (check the timezone in n8n settings)\n\nThe arithmetic is done in code; the AI only writes the briefing.",
+        "height": 260,
+        "width": 460,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        -300
+      ],
+      "id": "cc961de1-e928-4ee8-8cc8-42af07540d7e",
+      "name": "Setup Notes"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Every Monday 08:00": {
+      "main": [
+        [
+          {
+            "node": "Read inventory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read inventory": {
+      "main": [
+        [
+          {
+            "node": "Calculate Stock Cover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Stock Cover": {
+      "main": [
+        [
+          {
+            "node": "AI Weekly Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Weekly Brief",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Weekly Brief",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Weekly Brief": {
+      "main": [
+        [
+          {
+            "node": "Email supply chain lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,352 @@
+{
+  "name": "2 - Quality Assurance Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "qa-inspection-result",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "d24948b0-e6ef-4ccb-a655-49859799a694",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "6588799d-1cf7-4dc9-a86b-1e917782bc77",
+              "leftValue": "={{ $json.headers['x-api-key'] }}",
+              "rightValue": "REPLACE_WITH_YOUR_SECRET_KEY",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -680,
+        0
+      ],
+      "id": "50c6bd5c-d9b2-4374-916b-f6290974aee0",
+      "name": "API key valid?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.item.json.body || {};\nconst inspected = Number(b.units_inspected);\nconst defective = Number(b.units_defective);\nconst valid = Number.isFinite(inspected) && Number.isFinite(defective) && inspected > 0 && defective >= 0 && defective <= inspected;\nconst rate = valid ? Math.round((defective / inspected) * 10000) / 100 : null;\nreturn { json: {\n  batch_id: b.batch_id || 'unknown',\n  product_line: b.product_line || 'unknown',\n  timestamp: b.timestamp || new Date().toISOString(),\n  units_inspected: b.units_inspected, units_defective: b.units_defective,\n  defect_types: b.defect_types || '',\n  inspector_notes: b.inspector_notes || '',\n  defect_rate_pct: rate,\n  input_valid: valid,\n  warn_limit_pct: 2,   // ILLUSTRATIVE - set your own tolerance\n  hard_limit_pct: 5    // ILLUSTRATIVE - set your own tolerance\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        0
+      ],
+      "id": "edc2fcfc-5a5a-4197-8d60-955aebbe9996",
+      "name": "Calculate Defect Rate"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Batch: {{ $json.batch_id }}\nProduct line: {{ $json.product_line }}\nUnits inspected: {{ $json.units_inspected }}\nUnits defective: {{ $json.units_defective }}\nDefect rate (%): {{ $json.defect_rate_pct }}\nWarning limit (%): {{ $json.warn_limit_pct }}\nHard limit (%): {{ $json.hard_limit_pct }}\nDefect types: {{ $json.defect_types }}\nInspector notes: {{ $json.inspector_notes }}\nInput valid: {{ $json.input_valid }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a quality-assurance assistant for a manufacturing plant.\nYou receive the result of one batch inspection: units inspected, units defective, defect types, the inspector's notes and the calculated defect rate.\nYou support the quality engineer. You recommend; a person makes the final decision.\n\nReturn:\n- disposition: exactly one of Release, Hold for Inspection, Reject Batch\n- likely_defect_pattern: the main pattern in the defects in one sentence\n- root_cause_hypotheses: up to three possible causes, clearly phrased as hypotheses to verify\n- corrective_actions: up to three concrete actions\n- explanation: 2-3 plain-language sentences explaining why you chose this disposition and which inputs mattered most\nGuidance: a defect rate below the warning limit with no worrying notes usually means Release; between warning and hard limit means Hold for Inspection; above the hard limit usually means Hold or Reject. If the data is incomplete or inconsistent, choose Hold for Inspection and say why. Never invent measurements."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -240,
+        0
+      ],
+      "id": "1a37b4e8-d26a-44b4-bd5a-e4354301ce0f",
+      "name": "AI Quality Analysis"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5-5",
+          "cachedResultName": "Claude Sonnet 5.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        -320,
+        240
+      ],
+      "id": "2059b11e-4e10-4355-9307-215dcaac54c7",
+      "name": "Anthropic Chat Model"
+    },
+    {
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\n  \"disposition\": \"Hold for Inspection\",\n  \"likely_defect_pattern\": \"Mostly surface scratches on one side\",\n  \"root_cause_hypotheses\": \"1) Worn guide rail; 2) Packaging contact; 3) Tool change on the previous shift\",\n  \"corrective_actions\": \"1) Inspect guide rails; 2) Re-sample 50 units; 3) Review last tool change record\",\n  \"explanation\": \"The defect rate is above the warning limit and the notes point to one repeated pattern, so a short hold for inspection is safer than release.\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -120,
+        240
+      ],
+      "id": "d75fef28-e481-455b-b4b6-06852eae400b",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = $input.item.json.output || {};\nconst base = $('Calculate Defect Rate').item.json;\nconst allowed = ['Release', 'Hold for Inspection', 'Reject Batch'];\nconst rank = (d) => allowed.indexOf(d);\nlet disp = out.disposition;\nlet guard = 'passed';\nif (!base.input_valid) { disp = 'Hold for Inspection'; guard = 'failed: invalid inspection data, held for human check'; }\nelse {\n  if (!allowed.includes(disp)) { disp = 'Hold for Inspection'; guard = 'failed: invalid AI disposition, held for human check'; }\n  if (base.defect_rate_pct >= base.hard_limit_pct && rank(disp) < rank('Hold for Inspection')) { disp = 'Hold for Inspection'; guard = 'adjusted: defect rate above hard limit, cannot be released'; }\n}\nreturn { json: {\n  ...base,\n  disposition: disp,\n  likely_defect_pattern: out.likely_defect_pattern || 'n/a',\n  root_cause_hypotheses: out.root_cause_hypotheses || 'n/a',\n  corrective_actions: out.corrective_actions || 'Manual review required',\n  explanation: out.explanation || '',\n  guard_check: guard,\n  needs_attention: disp !== 'Release'\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        120,
+        0
+      ],
+      "id": "fa2cc273-0593-410a-a534-26145a77ee19",
+      "name": "Validate AI Output"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "Batch ID": "={{ $json.batch_id }}",
+            "Product Line": "={{ $json.product_line }}",
+            "Units Inspected": "={{ $json.units_inspected }}",
+            "Units Defective": "={{ $json.units_defective }}",
+            "Defect Rate %": "={{ $json.defect_rate_pct }}",
+            "Defect Types": "={{ $json.defect_types }}",
+            "Disposition": "={{ $json.disposition }}",
+            "Defect Pattern": "={{ $json.likely_defect_pattern }}",
+            "Root Cause Hypotheses": "={{ $json.root_cause_hypotheses }}",
+            "Corrective Actions": "={{ $json.corrective_actions }}",
+            "Guard Check": "={{ $json.guard_check }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        340,
+        0
+      ],
+      "id": "f3debafc-c3d8-4e9c-813d-fb1f1524d5ad",
+      "name": "Log inspection",
+      "notes": "Select the spreadsheet and the tab: Quality Log",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "98a2c7c5-b0ac-429d-a9fc-b30266ab0e11",
+              "leftValue": "={{ $('Validate AI Output').item.json.needs_attention }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        560,
+        0
+      ],
+      "id": "9ec8cbcf-8394-46d9-9089-22337afa03b3",
+      "name": "Needs attention?"
+    },
+    {
+      "parameters": {
+        "sendTo": "REPLACE_WITH_QA_LEAD_EMAIL",
+        "subject": "=[{{ $('Validate AI Output').item.json.disposition }}] Batch {{ $('Validate AI Output').item.json.batch_id }} ({{ $('Validate AI Output').item.json.product_line }})",
+        "emailType": "text",
+        "message": "=Batch: {{ $('Validate AI Output').item.json.batch_id }}\nProduct line: {{ $('Validate AI Output').item.json.product_line }}\nDefect rate: {{ $('Validate AI Output').item.json.defect_rate_pct }}% ({{ $('Validate AI Output').item.json.units_defective }} of {{ $('Validate AI Output').item.json.units_inspected }})\nRecommended disposition: {{ $('Validate AI Output').item.json.disposition }}\n\nPattern: {{ $('Validate AI Output').item.json.likely_defect_pattern }}\nPossible causes (hypotheses): {{ $('Validate AI Output').item.json.root_cause_hypotheses }}\nCorrective actions: {{ $('Validate AI Output').item.json.corrective_actions }}\n\n{{ $('Validate AI Output').item.json.explanation }}\n\nGuard check: {{ $('Validate AI Output').item.json.guard_check }}\n\nThis is an AI-assisted recommendation. The quality engineer makes the final decision.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        780,
+        -60
+      ],
+      "id": "9f2265d4-8318-4bbc-82e6-5fe1bdf89deb",
+      "name": "Alert QA lead"
+    },
+    {
+      "parameters": {
+        "content": "**2 Quality Assurance Assistant**\n\nSetup:\n1. Replace REPLACE_WITH_YOUR_SECRET_KEY in 'API key valid?'\n2. Replace the QA lead email\n3. Select the Google Sheet tab 'Quality Log'\n4. Set your own limits in 'Calculate Defect Rate' (2% and 5% are illustrative)\n\nThe 'Validate AI Output' node is a deterministic safety check: the AI can never release a batch above the hard limit.",
+        "height": 260,
+        "width": 440,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        -300
+      ],
+      "id": "39066ff9-8adf-4de9-9794-555bc6349f27",
+      "name": "Setup Notes"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "API key valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API key valid?": {
+      "main": [
+        [
+          {
+            "node": "Calculate Defect Rate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Defect Rate": {
+      "main": [
+        [
+          {
+            "node": "AI Quality Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Quality Analysis",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Quality Analysis",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Quality Analysis": {
+      "main": [
+        [
+          {
+            "node": "Validate AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate AI Output": {
+      "main": [
+        [
+          {
+            "node": "Log inspection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log inspection": {
+      "main": [
+        [
+          {
+            "node": "Needs attention?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs attention?": {
+      "main": [
+        [
+          {
+            "node": "Alert QA lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

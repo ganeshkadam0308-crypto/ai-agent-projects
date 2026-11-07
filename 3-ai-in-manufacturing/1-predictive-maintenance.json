@@ -1,0 +1,396 @@
+{
+  "name": "1 - Predictive Maintenance Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pm-sensor-reading",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -900,
+        0
+      ],
+      "id": "1508747b-92ce-4f32-a316-cd3cf497880b",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f4fa25b3-17dd-48f5-a657-73efd25b59f1",
+              "leftValue": "={{ $json.headers['x-api-key'] }}",
+              "rightValue": "REPLACE_WITH_YOUR_SECRET_KEY",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -680,
+        0
+      ],
+      "id": "8bff1e46-70b1-4b32-94f9-4a5a3176b7a6",
+      "name": "API key valid?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.item.json.body || {};\n// ILLUSTRATIVE limits - replace with your machine manufacturer's values\nconst limits = {\n  temperature_c:    { warn: 75,   hard: 90 },\n  vibration_mm_s:   { warn: 4.5,  hard: 7.1 },\n  pressure_bar:     { warn: 8,    hard: 10 },\n  runtime_hours:    { warn: 4000, hard: 5000 },\n  last_service_days:{ warn: 90,   hard: 180 }\n};\nconst flags = [];\nlet hard = false;\nfor (const [k, l] of Object.entries(limits)) {\n  const v = Number(b[k]);\n  if (b[k] === undefined || b[k] === null || b[k] === '' || Number.isNaN(v)) { flags.push(k + ': missing or invalid'); continue; }\n  if (v >= l.hard) { flags.push(k + ' = ' + v + ' exceeds hard limit ' + l.hard); hard = true; }\n  else if (v >= l.warn) { flags.push(k + ' = ' + v + ' above warning level ' + l.warn); }\n}\nreturn { json: {\n  machine_id: b.machine_id || 'unknown',\n  timestamp: b.timestamp || new Date().toISOString(),\n  temperature_c: b.temperature_c, vibration_mm_s: b.vibration_mm_s, pressure_bar: b.pressure_bar,\n  runtime_hours: b.runtime_hours, last_service_days: b.last_service_days,\n  flags: flags, flag_text: flags.join('; '),\n  hard_limit_breached: hard, is_anomalous: flags.length > 0\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        -60
+      ],
+      "id": "9036c204-8919-4bd7-aad6-31f2e8efca45",
+      "name": "Rule Check"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d9db85f3-7f17-48d6-8c31-9ca6540c40fa",
+              "leftValue": "={{ $json.is_anomalous }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -240,
+        -60
+      ],
+      "id": "24606140-63af-45d8-9b5c-f9c016e2daaf",
+      "name": "Anomaly detected?"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Machine: {{ $json.machine_id }}\nTimestamp: {{ $json.timestamp }}\nTemperature (C): {{ $json.temperature_c }}\nVibration (mm/s): {{ $json.vibration_mm_s }}\nPressure (bar): {{ $json.pressure_bar }}\nRuntime hours: {{ $json.runtime_hours }}\nDays since last service: {{ $json.last_service_days }}\nRule-based flags: {{ $json.flag_text }}\nHard limit breached: {{ $json.hard_limit_breached }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are a predictive-maintenance assistant for a manufacturing plant.\nYou receive one sensor reading from a machine plus the rule-based flags that were triggered.\nYour job is to support the maintenance engineer, never to replace them. You only recommend; you never order a shutdown.\n\nReturn:\n- severity: exactly one of Low, Medium, High, Critical\n- probable_cause: the most likely cause, phrased as a hypothesis, not a fact\n- key_factors: the sensor variables that drove your assessment, ranked by importance (this makes the decision explainable to operators)\n- recommended_action: one concrete next step for the maintenance team\n- explanation: 2-3 plain-language sentences a shift supervisor can understand\nDo not invent readings or history that were not provided. If data is missing, say so and lean towards a cautious severity."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -20,
+        -120
+      ],
+      "id": "0da10a66-a776-4260-8f50-57249f2e11db",
+      "name": "AI Diagnosis"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5-5",
+          "cachedResultName": "Claude Sonnet 5.5"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        -100,
+        120
+      ],
+      "id": "0211a0ed-8205-42a8-8ef3-b31f98925b23",
+      "name": "Anthropic Chat Model"
+    },
+    {
+      "parameters": {
+        "schemaType": "fromJson",
+        "jsonSchemaExample": "{\n  \"severity\": \"High\",\n  \"probable_cause\": \"Possible bearing wear (hypothesis)\",\n  \"key_factors\": \"1) vibration_mm_s, 2) temperature_c, 3) last_service_days\",\n  \"recommended_action\": \"Schedule a bearing inspection within 24 hours\",\n  \"explanation\": \"Vibration and temperature are both elevated and the machine is overdue for service.\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        100,
+        120
+      ],
+      "id": "1b55eb1e-60dc-4cba-935a-582a3e7ed961",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "const out = $input.item.json.output || {};\nconst base = $('Rule Check').item.json;\nconst rank = ['Low', 'Medium', 'High', 'Critical'];\nlet sev = out.severity;\nlet guard = 'passed';\nif (!rank.includes(sev)) { sev = 'High'; guard = 'failed: invalid AI severity, escalated for human review'; }\nif (base.hard_limit_breached && rank.indexOf(sev) < rank.indexOf('High')) { sev = 'High'; guard = 'adjusted: hard limit breached, severity raised to High'; }\nreturn { json: {\n  ...base,\n  severity: sev,\n  probable_cause: out.probable_cause || 'n/a',\n  key_factors: out.key_factors || 'n/a',\n  recommended_action: out.recommended_action || 'Inspect machine manually',\n  explanation: out.explanation || '',\n  guard_check: guard,\n  escalate: rank.indexOf(sev) >= 2\n} };",
+        "mode": "runOnceForEachItem"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        -120
+      ],
+      "id": "f8bde707-7c77-4e4b-a111-b71ddddd11c6",
+      "name": "Validate AI Output"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "Machine ID": "={{ $json.machine_id }}",
+            "Temperature C": "={{ $json.temperature_c }}",
+            "Vibration mm/s": "={{ $json.vibration_mm_s }}",
+            "Pressure bar": "={{ $json.pressure_bar }}",
+            "Runtime Hours": "={{ $json.runtime_hours }}",
+            "Rule Flags": "={{ $json.flag_text }}",
+            "Severity": "={{ $json.severity }}",
+            "Probable Cause": "={{ $json.probable_cause }}",
+            "Recommended Action": "={{ $json.recommended_action }}",
+            "Guard Check": "={{ $json.guard_check }}"
+          },
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        480,
+        -120
+      ],
+      "id": "cdac4a37-91ee-4f3f-963d-0ed3bde61c8c",
+      "name": "Log maintenance event",
+      "notes": "Select the spreadsheet and the tab: Maintenance Log",
+      "notesInFlow": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "53847e32-340c-4234-933c-4ffe7d1bdf2a",
+              "leftValue": "={{ $('Validate AI Output').item.json.escalate }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        700,
+        -120
+      ],
+      "id": "1ef7479d-7b12-413f-92a9-015547d3fb7a",
+      "name": "Escalate to engineer?"
+    },
+    {
+      "parameters": {
+        "sendTo": "REPLACE_WITH_MAINTENANCE_MANAGER_EMAIL",
+        "subject": "=[{{ $('Validate AI Output').item.json.severity }}] Maintenance alert: {{ $('Validate AI Output').item.json.machine_id }}",
+        "emailType": "text",
+        "message": "=Machine: {{ $('Validate AI Output').item.json.machine_id }}\nTime: {{ $('Validate AI Output').item.json.timestamp }}\nSeverity: {{ $('Validate AI Output').item.json.severity }}\n\nTriggered rules: {{ $('Validate AI Output').item.json.flag_text }}\n\nProbable cause (hypothesis): {{ $('Validate AI Output').item.json.probable_cause }}\nKey factors: {{ $('Validate AI Output').item.json.key_factors }}\nRecommended action: {{ $('Validate AI Output').item.json.recommended_action }}\n\n{{ $('Validate AI Output').item.json.explanation }}\n\nGuard check: {{ $('Validate AI Output').item.json.guard_check }}\n\nThis is an AI-assisted recommendation. The decision stays with the maintenance engineer.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        920,
+        -180
+      ],
+      "id": "23726c73-2afa-4c5c-9f50-6981d67b048a",
+      "name": "Alert maintenance manager"
+    },
+    {
+      "parameters": {
+        "content": "**1 Predictive Maintenance Monitor**\n\nSetup:\n1. Replace REPLACE_WITH_YOUR_SECRET_KEY in 'API key valid?'\n2. Replace the manager email in the Gmail node\n3. Select the Google Sheet tab 'Maintenance Log'\n4. Edit the limits in 'Rule Check' (they are illustrative)\n\nTest: POST to the webhook with header x-api-key (see README).\nOnly anomalous readings reach the AI and the log.",
+        "height": 260,
+        "width": 420,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -900,
+        -330
+      ],
+      "id": "45db85a1-20dd-4edd-b8f0-dd747ef9fe31",
+      "name": "Setup Notes"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "API key valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API key valid?": {
+      "main": [
+        [
+          {
+            "node": "Rule Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rule Check": {
+      "main": [
+        [
+          {
+            "node": "Anomaly detected?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anomaly detected?": {
+      "main": [
+        [
+          {
+            "node": "AI Diagnosis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Diagnosis",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Diagnosis",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Diagnosis": {
+      "main": [
+        [
+          {
+            "node": "Validate AI Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate AI Output": {
+      "main": [
+        [
+          {
+            "node": "Log maintenance event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log maintenance event": {
+      "main": [
+        [
+          {
+            "node": "Escalate to engineer?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Escalate to engineer?": {
+      "main": [
+        [
+          {
+            "node": "Alert maintenance manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
